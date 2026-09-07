@@ -1,10 +1,15 @@
 import z from '@deepseek-ai/schemastery'
-import { createClassifier } from './classifier.js'
+import { commonStableFragment, createClassifier, DEFAULT_RULES } from './classifier.js'
 
 export const name = 'dsh-better-retry'
 export const inject = ['llm', 'settings']
 
 const settingsSchema = z.object({ rules: z.array(z.string()).default([]) })
+
+function classifierForRules(rules) {
+  const custom = rules.length > 0 ? [commonStableFragment(rules)] : []
+  return createClassifier([...DEFAULT_RULES, ...custom])
+}
 
 /**
  * Classify selected provider failures and hand retry execution to dsh-llm-retry.
@@ -13,8 +18,8 @@ const settingsSchema = z.object({ rules: z.array(z.string()).default([]) })
  */
 export function apply(ctx) {
   const scope = ctx.settings.register('dsh-better-retry', settingsSchema, { base: { rules: [] } })
-  let classifier = createClassifier(scope.get().rules)
-  scope.watch(next => { classifier = createClassifier(next.rules) })
+  let classifier = classifierForRules(scope.get().rules)
+  scope.watch(next => { classifier = classifierForRules(next.rules) })
   ctx.on('llm/stream', (_options, next) => rewriteStream(next(), () => classifier))
 }
 

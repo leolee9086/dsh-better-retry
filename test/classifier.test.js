@@ -17,6 +17,14 @@ test('derives a stable common fragment from multiple samples', () => {
   ]), 'gateway overloaded, please retry later')
 })
 
+test('uses the common fragment of saved samples as one user rule', () => {
+  const classifier = createClassifier([commonStableFragment([
+    'gateway overloaded, please retry later (request id: a1)',
+    'gateway overloaded, please retry later (request id: b2)',
+  ])])
+  assert.equal(classifier.classify('gateway overloaded, please retry later (request id: c3)'), true)
+})
+
 test('does not accept short generic fragments', () => {
   const classifier = createClassifier()
   classifier.add(['please retry later'])
