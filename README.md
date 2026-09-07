@@ -12,7 +12,7 @@ The package is an installable DSH bundle. From a machine with the `dsh` CLI:
 dsh plugin --profile web add github:leolee9086/dsh-better-retry
 ```
 
-Git installs run the package's source directly, so this repository intentionally ships plain JavaScript and does not require a build step. Pin a commit for reproducible deployments:
+GitHub installation uses the committed `lib/` artifacts, so no build step is required on the target machine. Pin a commit for reproducible deployments:
 
 ```sh
 dsh plugin --profile web add github:leolee9086/dsh-better-retry#COMMIT_SHA
