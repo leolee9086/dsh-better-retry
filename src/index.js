@@ -1,35 +1,40 @@
 import z from '@deepseek-ai/schemastery'
-import { commonStableFragment, createClassifier, DEFAULT_RULES } from './classifier.js'
+import { CHANNEL, createRuntime } from './runtime.js'
 
 export const name = 'dsh-better-retry'
-export const inject = ['llm', 'settings']
+export const inject = ['llm', 'settings', 'connection']
 
-const settingsSchema = z.object({ rules: z.array(z.string()).default([]) })
+const patternSchema = z.object({
+  id: z.string(), pattern: z.string(), mode: z.union([z.const('exact'), z.const('contains')]),
+  code: z.string(), provider: z.string(), enabled: z.boolean(), sample: z.string(),
+})
+const settingsSchema = z.object({
+  // The old field remains readable until the first successful management edit migrates it.
+  rules: z.array(z.string()).default([]),
+  patterns: z.array(patternSchema).default([]),
+  disabledBuiltins: z.array(z.string()).default([]),
+})
 
-function classifierForRules(rules) {
-  const custom = rules.length > 0 ? [commonStableFragment(rules)] : []
-  return createClassifier([...DEFAULT_RULES, ...custom])
-}
-
-/**
- * Classify selected provider failures and hand retry execution to dsh-llm-retry.
- * The settings provider owns the durable file; this plugin owns only the
- * classifier and its namespace.
- */
 export function apply(ctx) {
-  const scope = ctx.settings.register('dsh-better-retry', settingsSchema, { base: { rules: [] } })
-  let classifier = classifierForRules(scope.get().rules)
-  scope.watch(next => { classifier = classifierForRules(next.rules) })
-  ctx.on('llm/stream', (_options, next) => rewriteStream(next(), () => classifier))
+  const scope = ctx.settings.register('dsh-better-retry', settingsSchema, {
+    base: { rules: [], patterns: [], disabledBuiltins: [] },
+  })
+  const runtime = createRuntime(scope)
+  ctx.effect(() => ctx.connection.rpc.handle(CHANNEL, (endpoint, input) => runtime.handle(endpoint, input)))
+  ctx.on('llm/stream', (options, next) => rewriteStream(next(), runtime, options.provider ?? ''))
 }
 
-async function* rewriteStream(source, getClassifier) {
+/** Classification keeps the original message and metadata; DSH owns the retry loop. */
+async function* rewriteStream(source, runtime, provider) {
   for await (const chunk of source) {
     if (chunk?.type === 'finish' && chunk.reason?.kind === 'error') {
       const failure = chunk.reason.failure
-      if (failure?.code === 'PI_AI_ERROR' && getClassifier().classify(failure.message)) {
-        yield { ...chunk, reason: { ...chunk.reason, failure: { ...failure, code: 'RATE_LIMIT' } } }
-        continue
+      if (failure) {
+        runtime.observe(failure, provider)
+        if (runtime.match(failure, provider)) {
+          yield { ...chunk, reason: { ...chunk.reason, failure: { ...failure, code: 'RATE_LIMIT' } } }
+          continue
+        }
       }
     }
     yield chunk

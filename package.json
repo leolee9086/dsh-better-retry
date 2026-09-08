@@ -1,6 +1,6 @@
 {
   "name": "dsh-better-retry",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "指数退避与可确认错误分类的 DeepSeek Harness 重试插件",
   "license": "MIT",
   "type": "module",
@@ -40,7 +40,8 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-settings",
         "@deepseek-ai/dsh-client-ui-chat",
         "@deepseek-ai/dsh-client-locale"
       ]
@@ -60,6 +61,7 @@
   },
   "devDependencies": {
     "react-dom": "18.3.1",
+    "react-test-renderer": "18.3.1",
     "tsdown": "^0.22.2"
   }
 }
